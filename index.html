@@ -148,6 +148,7 @@
   .add-row input:focus, .add-row select:focus, .add-row textarea:focus{border-color:var(--copper);}
   .add-row input[name="name"], .add-row input[name="title"]{flex:1 1 200px;}
   .add-row-note{flex-direction:column;align-items:stretch;}
+  .add-row-note input[name="title"]{flex:none;}
   .add-row-note textarea{min-height:56px;resize:vertical;font-family:var(--font-body);}
   .add-row button{
     background:var(--ink);color:#fff;border:none;
@@ -206,9 +207,29 @@
   .note-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
   .note-head-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .note-title{font-family:var(--font-display);font-weight:600;font-size:14.5px;}
-  .note-text{font-size:14.5px;line-height:1.5;white-space:pre-wrap;}
+  .note-text{font-size:14.5px;line-height:1.5;}
+  .note-text p.note-line{margin:0 0 3px;}
+  .note-text h3.note-h1{font-family:var(--font-display);font-weight:700;font-size:17px;letter-spacing:-0.01em;margin:10px 0 4px;}
+  .note-text h4.note-h2{font-family:var(--font-display);font-weight:600;font-size:15px;margin:8px 0 4px;}
+  .note-text h3.note-h1:first-child, .note-text h4.note-h2:first-child{margin-top:0;}
+  .note-text ul.note-list{margin:2px 0 6px;padding-left:20px;}
+  .note-text ul.note-list li{margin:2px 0;}
+  .note-text strong{font-weight:700;}
   .note-card.editing{background:rgba(181,101,29,0.04);}
   .note-actions{display:flex;gap:8px;margin-top:8px;}
+  .md-hint{font-size:11px;color:var(--ink-faint);margin:-2px 0 2px;}
+
+  .notebook-manage{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-bottom:14px;margin-bottom:14px;border-bottom:1px dashed var(--line);}
+  .notebook-manage-label{font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.06em;flex-shrink:0;}
+  .notebook-chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .notebook-chips-empty{font-size:12.5px;color:var(--ink-faint);}
+  .notebook-chip{display:inline-flex;align-items:center;gap:6px;}
+  .notebook-del-btn{background:none;border:none;color:var(--ink-faint);font-size:11px;padding:0;line-height:1;cursor:pointer;}
+  .notebook-del-btn:hover{color:var(--red);}
+  .notebook-add-form{margin-left:auto;flex-shrink:0;display:flex;align-items:center;gap:4px;}
+  .notebook-add-form input{font-family:var(--font-body);font-size:12.5px;border:1px solid var(--line);background:#fff;padding:5px 8px;color:var(--ink);width:150px;}
+  .notebook-add-form input:focus{border-color:var(--copper);}
+  .notebook-add-form button{font-size:16px;padding:2px 8px;}
 
   .hint{margin-top:34px;font-size:12px;color:var(--ink-faint);text-align:center;}
   .save-flag{position:fixed;bottom:16px;right:16px;font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);opacity:0;transition:opacity .3s;}
@@ -253,6 +274,7 @@ let state = {
   courses: [],
   deadlines: [],
   notes: [],
+  notebooks: [],
   meta: { targetEcts: 210, semester: 1 }
 };
 
@@ -261,7 +283,7 @@ let editingNoteId = null;
 const filters = {
   courses: { search:'', semester:'all' },
   deadlines: { search:'', status:'all' },
-  notes: { search:'', course:'all' }
+  notes: { search:'', course:'all', notebook:'all' }
 };
 
 const seedState = () => ({
@@ -281,11 +303,15 @@ const seedState = () => ({
   ],
   deadlines: [],
   notes: [],
+  notebooks: [],
   meta: { targetEcts: 210, semester: 1 }
 });
 
 function mkCourse(name, code, ects, semester){
   return { id: newId(), name, code, ects, semester, grade: '' };
+}
+function mkNotebook(name){
+  return { id: newId(), name };
 }
 function newId(){
   return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
@@ -381,8 +407,12 @@ async function loadState(){
       state.courses = state.courses || [];
       state.deadlines = state.deadlines || [];
       state.notes = state.notes || [];
+      state.notebooks = state.notebooks || [];
       state.courses.forEach(c=>{ if(c.grade === undefined) c.grade = ''; });
-      state.notes.forEach(n=>{ if(n.title === undefined) n.title = ''; });
+      state.notes.forEach(n=>{
+        if(n.title === undefined) n.title = '';
+        if(n.notebookId === undefined) n.notebookId = null;
+      });
       if(!state.meta) state.meta = { targetEcts:210, semester:1 };
     } else {
       state = seedState();
@@ -455,6 +485,7 @@ function buildApp(){
     <div class="filterbar">
       <input type="search" id="searchInput" placeholder="Search…">
       <select id="contextFilter"></select>
+      <select id="notebookFilter" style="display:none;"></select>
     </div>
 
     <main>
@@ -480,10 +511,20 @@ function buildApp(){
       </section>
 
       <section id="panel-notes" class="panel">
+        <div class="notebook-manage">
+          <span class="notebook-manage-label">Notebooks</span>
+          <div id="notebookChips" class="notebook-chips"></div>
+          <form id="notebookForm" class="notebook-add-form">
+            <input name="name" placeholder="+ New notebook" maxlength="40" required>
+            <button type="submit" class="icon-btn" title="Add notebook">+</button>
+          </form>
+        </div>
         <form id="noteForm" class="add-row add-row-note">
           <input name="title" placeholder="Title (optional)">
           <select name="courseId"></select>
+          <select name="notebookId"></select>
           <textarea name="text" placeholder="Quick note…" required></textarea>
+          <div class="md-hint">Supports **bold**, # heading, ## subheading, - bullet</div>
           <button type="submit">Add note</button>
         </form>
         <div id="noteList" class="list"></div>
@@ -500,10 +541,12 @@ function buildApp(){
   document.getElementById('courseForm').addEventListener('submit', onAddCourse);
   document.getElementById('deadlineForm').addEventListener('submit', onAddDeadline);
   document.getElementById('noteForm').addEventListener('submit', onAddNote);
+  document.getElementById('notebookForm').addEventListener('submit', onAddNotebook);
   document.getElementById('courseList').addEventListener('click', onCourseListClick);
   document.getElementById('courseList').addEventListener('change', onCourseGradeChange);
   document.getElementById('deadlineList').addEventListener('click', onDeadlineListClick);
   document.getElementById('noteList').addEventListener('click', onNoteListClick);
+  document.getElementById('notebookChips').addEventListener('click', onNotebookChipsClick);
 
   const semSelect = document.getElementById('semesterSelect');
   semSelect.innerHTML = Array.from({length:7}, (_,i)=>i+1).map(n=>`<option value="${n}">Sem. ${n}</option>`).join('');
@@ -531,6 +574,10 @@ function buildApp(){
     if(activeTab === 'notes') filters.notes.course = e.target.value;
     renderActiveList();
   });
+  document.getElementById('notebookFilter').addEventListener('change', e=>{
+    filters.notes.notebook = e.target.value;
+    renderActiveList();
+  });
 
   updateFilterBarForTab(activeTab);
   renderAll();
@@ -545,18 +592,25 @@ function switchTab(tab){
 function updateFilterBarForTab(tab){
   const search = document.getElementById('searchInput');
   const ctx = document.getElementById('contextFilter');
+  const nbFilter = document.getElementById('notebookFilter');
   search.value = filters[tab].search;
   search.placeholder = tab === 'courses' ? 'Search courses…' : tab === 'deadlines' ? 'Search deadlines…' : 'Search notes…';
   if(tab === 'courses'){
     ctx.innerHTML = '<option value="all">All semesters</option>' + Array.from({length:7},(_,i)=>i+1).map(n=>`<option value="${n}">Sem. ${n}</option>`).join('');
     ctx.value = filters.courses.semester;
+    nbFilter.style.display = 'none';
   } else if(tab === 'deadlines'){
     ctx.innerHTML = `<option value="all">All</option><option value="upcoming">Upcoming</option><option value="overdue">Overdue</option><option value="done">Done</option>`;
     ctx.value = filters.deadlines.status;
+    nbFilter.style.display = 'none';
   } else if(tab === 'notes'){
     ctx.innerHTML = '<option value="all">All courses</option><option value="general">General</option>' +
       state.courses.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
     ctx.value = filters.notes.course;
+    nbFilter.innerHTML = '<option value="all">All notebooks</option><option value="none">No notebook</option>' +
+      state.notebooks.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(nb=>`<option value="${nb.id}">${escapeHtml(nb.name)}</option>`).join('');
+    nbFilter.value = filters.notes.notebook;
+    nbFilter.style.display = '';
   }
 }
 function renderActiveList(){
@@ -567,6 +621,8 @@ function renderActiveList(){
 function renderAll(){
   renderStats();
   renderCourseOptions();
+  renderNotebookOptions();
+  renderNotebookChips();
   renderCourses();
   renderDeadlines();
   renderNotes();
@@ -660,6 +716,59 @@ function courseOptionsHtml(selected){
       .map(c=>`<option value="${c.id}" ${selected===c.id?'selected':''}>${escapeHtml(c.name)}</option>`));
   return opts.join('');
 }
+function notebookOptionsHtml(selected){
+  const opts = ['<option value="">No notebook</option>']
+    .concat(state.notebooks.slice().sort((a,b)=>a.name.localeCompare(b.name))
+      .map(nb=>`<option value="${nb.id}" ${selected===nb.id?'selected':''}>${escapeHtml(nb.name)}</option>`));
+  return opts.join('');
+}
+function renderNotebookOptions(){
+  const opts = notebookOptionsHtml('');
+  document.querySelectorAll('select[name="notebookId"]').forEach(sel=>{
+    const cur = sel.value;
+    sel.innerHTML = opts;
+    if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+  });
+}
+function renderNotebookChips(){
+  const wrap = document.getElementById('notebookChips');
+  if(!wrap) return;
+  if(state.notebooks.length === 0){
+    wrap.innerHTML = '<span class="notebook-chips-empty">No notebooks yet</span>';
+    return;
+  }
+  wrap.innerHTML = state.notebooks.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(nb => `
+    <span class="chip subtle notebook-chip">${escapeHtml(nb.name)}<button type="button" class="notebook-del-btn" data-id="${nb.id}" title="Delete notebook">✕</button></span>
+  `).join('');
+}
+// ---- Minimal markdown rendering: **bold**, # heading, ## subheading, - bullet ----
+function renderInline(text){
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+function renderNoteMarkdown(raw){
+  const lines = String(raw ?? '').split('\n');
+  let html = '';
+  let inList = false;
+  const closeList = () => { if(inList){ html += '</ul>'; inList = false; } };
+  lines.forEach(line=>{
+    const trimmed = line.trim();
+    const bulletMatch = /^-\s+(.*)$/.exec(trimmed);
+    if(bulletMatch){
+      if(!inList){ html += '<ul class="note-list">'; inList = true; }
+      html += `<li>${renderInline(bulletMatch[1])}</li>`;
+      return;
+    }
+    closeList();
+    if(trimmed === ''){ html += '<p class="note-line">&nbsp;</p>'; return; }
+    const h2Match = /^##\s+(.*)$/.exec(trimmed);
+    if(h2Match){ html += `<h4 class="note-h2">${renderInline(h2Match[1])}</h4>`; return; }
+    const h1Match = /^#\s+(.*)$/.exec(trimmed);
+    if(h1Match){ html += `<h3 class="note-h1">${renderInline(h1Match[1])}</h3>`; return; }
+    html += `<p class="note-line">${renderInline(trimmed)}</p>`;
+  });
+  closeList();
+  return html;
+}
 function renderNotes(){
   const list = document.getElementById('noteList');
   if(state.notes.length === 0){
@@ -669,8 +778,10 @@ function renderNotes(){
   const f = filters.notes;
   const filtered = state.notes.filter(n=>{
     const course = state.courses.find(c=>c.id === n.courseId);
+    const notebook = state.notebooks.find(nb=>nb.id === n.notebookId);
     const courseMatch = f.course === 'all' ? true : f.course === 'general' ? !n.courseId : n.courseId === f.course;
-    return courseMatch && matchesSearch(f.search, [n.title, n.text, course ? course.name : '']);
+    const notebookMatch = f.notebook === 'all' ? true : f.notebook === 'none' ? !n.notebookId : n.notebookId === f.notebook;
+    return courseMatch && notebookMatch && matchesSearch(f.search, [n.title, n.text, course ? course.name : '', notebook ? notebook.name : '']);
   });
   if(filtered.length === 0){
     list.innerHTML = '<div class="empty">No notes match your search or filter.</div>';
@@ -680,11 +791,13 @@ function renderNotes(){
   list.innerHTML = sorted.map(n => {
     if(n.id === editingNoteId) return renderNoteEditForm(n);
     const course = state.courses.find(c=>c.id === n.courseId);
+    const notebook = state.notebooks.find(nb=>nb.id === n.notebookId);
     return `
       <div class="note-card" data-id="${n.id}">
         <div class="note-head">
           <div class="note-head-left">
             <span class="chip subtle">${course ? escapeHtml(course.name) : 'General'}</span>
+            ${notebook ? `<span class="chip subtle">${escapeHtml(notebook.name)}</span>` : ''}
             <span class="row-meta">${formatDate(n.created.slice(0,10))}${n.updated ? ' · edited' : ''}</span>
           </div>
           <div>
@@ -693,7 +806,7 @@ function renderNotes(){
           </div>
         </div>
         ${n.title ? `<div class="note-title">${escapeHtml(n.title)}</div>` : ''}
-        <div class="note-text">${escapeHtml(n.text)}</div>
+        <div class="note-text">${renderNoteMarkdown(n.text)}</div>
       </div>
     `;
   }).join('');
@@ -703,7 +816,9 @@ function renderNoteEditForm(n){
     <div class="note-card editing" data-id="${n.id}">
       <input class="edit-title" data-id="${n.id}" value="${escapeAttr(n.title || '')}" placeholder="Title (optional)" style="width:100%;margin-bottom:8px;font-family:var(--font-display);font-weight:600;font-size:14.5px;border:1px solid var(--line);padding:6px 8px;">
       <select class="edit-course" data-id="${n.id}" style="margin-bottom:8px;border:1px solid var(--line);padding:6px 8px;">${courseOptionsHtml(n.courseId)}</select>
+      <select class="edit-notebook" data-id="${n.id}" style="margin-bottom:8px;border:1px solid var(--line);padding:6px 8px;">${notebookOptionsHtml(n.notebookId)}</select>
       <textarea class="edit-text" data-id="${n.id}" style="width:100%;min-height:70px;font-family:var(--font-body);font-size:14.5px;border:1px solid var(--line);padding:6px 8px;">${escapeHtml(n.text)}</textarea>
+      <div class="md-hint">Supports **bold**, # heading, ## subheading, - bullet</div>
       <div class="note-actions">
         <button type="button" class="save-edit-btn" data-id="${n.id}" style="background:var(--ink);color:#fff;border:none;font-family:var(--font-display);font-weight:600;font-size:13px;padding:6px 14px;">Save</button>
         <button type="button" class="cancel-edit-btn" data-id="${n.id}" style="background:none;color:var(--ink-soft);border:1px solid var(--line);font-family:var(--font-display);font-size:13px;padding:6px 14px;">Cancel</button>
@@ -737,9 +852,32 @@ function onAddNote(e){
   const f = e.target;
   const text = f.text.value.trim();
   if(!text) return;
-  state.notes.push({ id:newId(), courseId:f.courseId.value || null, title:f.title.value.trim(), text, created:new Date().toISOString(), updated:null });
+  state.notes.push({ id:newId(), courseId:f.courseId.value || null, notebookId:f.notebookId.value || null, title:f.title.value.trim(), text, created:new Date().toISOString(), updated:null });
   f.reset();
   saveState();
+  renderNotes();
+}
+function onAddNotebook(e){
+  e.preventDefault();
+  const f = e.target;
+  const name = f.name.value.trim();
+  if(!name) return;
+  state.notebooks.push(mkNotebook(name));
+  f.reset();
+  saveState();
+  renderNotebookChips();
+  renderNotebookOptions();
+  updateFilterBarForTab(activeTab);
+}
+function onNotebookChipsClick(e){
+  const btn = e.target.closest('.notebook-del-btn');
+  if(!btn) return;
+  state.notebooks = state.notebooks.filter(nb=>nb.id !== btn.dataset.id);
+  if(filters.notes.notebook === btn.dataset.id) filters.notes.notebook = 'all';
+  saveState();
+  renderNotebookChips();
+  renderNotebookOptions();
+  updateFilterBarForTab(activeTab);
   renderNotes();
 }
 function onCourseListClick(e){
@@ -794,9 +932,10 @@ function onNoteListClick(e){
       const card = save.closest('.note-card');
       const title = card.querySelector('.edit-title').value.trim();
       const courseId = card.querySelector('.edit-course').value || null;
+      const notebookId = card.querySelector('.edit-notebook').value || null;
       const text = card.querySelector('.edit-text').value.trim();
       if(text){
-        n.title = title; n.courseId = courseId; n.text = text;
+        n.title = title; n.courseId = courseId; n.notebookId = notebookId; n.text = text;
         n.updated = new Date().toISOString();
       }
     }

@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elektrisk Energiteknologi — Study Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --paper:#F7F7F2;
+    --grid-line:rgba(22,40,61,0.06);
+    --ink:#16283D;
+    --ink-soft:#5B6B7C;
+    --ink-faint:#93A2AF;
+    --copper:#B5651D;
+    --copper-soft:#F1DEC4;
+    --green:#3F7052;
+    --green-soft:#DCEAE1;
+    --red:#B23A2E;
+    --red-soft:#F3DEDA;
+    --line:#CDD5DC;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-body:'IBM Plex Sans', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size:28px 28px;
+    color:var(--ink);
+    font-family:var(--font-body);
+    min-height:100vh;
+  }
+  #app, #authWrap{max-width:880px;margin:0 auto;padding:32px 20px 60px;}
+  a{color:var(--copper);}
+  button{font-family:var(--font-body);cursor:pointer;}
+  :focus-visible{outline:2px solid var(--copper);outline-offset:2px;}
+
+  /* ---- Auth screen ---- */
+  #authWrap{max-width:380px;padding-top:80px;}
+  .auth-box{border:1.5px solid var(--ink);background:rgba(255,255,255,0.6);padding:28px;}
+  .auth-box h1{font-family:var(--font-display);font-size:22px;margin:0 0 4px;}
+  .auth-box p{color:var(--ink-soft);font-size:13.5px;margin:0 0 20px;}
+  .auth-box label{font-size:12px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.05em;display:block;margin-bottom:4px;margin-top:14px;}
+  .auth-box input{width:100%;font-size:14px;border:1px solid var(--line);background:#fff;padding:9px 10px;font-family:var(--font-body);}
+  .auth-box input:focus{border-color:var(--copper);}
+  .auth-box button{width:100%;margin-top:20px;background:var(--ink);color:#fff;border:none;font-family:var(--font-display);font-weight:600;font-size:14px;padding:10px;}
+  .auth-box button:hover{background:var(--copper);}
+  .auth-error{color:var(--red);font-size:13px;margin-top:12px;min-height:16px;}
+
+  /* ---- Title block ---- */
+  .titleblock{
+    border:1.5px solid var(--ink);
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:space-between;
+    align-items:stretch;
+    background:rgba(255,255,255,0.5);
+  }
+  .titleblock-main{padding:18px 22px;flex:1 1 220px;}
+  .titleblock-main h1{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:26px;
+    margin:0 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .titleblock-main p{margin:0;color:var(--ink-soft);font-size:14px;}
+  .signout-btn{background:none;border:1px solid var(--line);color:var(--ink-faint);font-family:var(--font-display);font-size:12px;padding:5px 10px;margin-top:10px;}
+  .signout-btn:hover{border-color:var(--red);color:var(--red);}
+  .titleblock-stats{display:flex;flex-wrap:wrap;}
+  .stat{
+    border-left:1.5px solid var(--ink);
+    padding:14px 16px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    gap:4px;
+    min-width:96px;
+  }
+  .stat-label{font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.06em;}
+  .stat-value{font-family:var(--font-display);font-size:18px;font-weight:700;}
+  .stat select, .stat input{
+    font-family:var(--font-display);
+    font-size:16px;
+    font-weight:700;
+    color:var(--ink);
+    border:none;
+    background:transparent;
+    padding:0;
+    width:100%;
+  }
+  .ects-row{display:flex;align-items:baseline;gap:4px;}
+  .ects-row input{width:44px;border-bottom:1px solid var(--ink-faint);}
+
+  /* ---- Tabs ---- */
+  .tabs{display:flex;gap:2px;margin-top:22px;border-bottom:1.5px solid var(--ink);}
+  .tab-btn{
+    background:none;border:none;
+    font-family:var(--font-display);
+    font-size:14px;font-weight:500;
+    color:var(--ink-soft);
+    padding:10px 4px;margin-right:24px;
+    border-bottom:2px solid transparent;
+    position:relative;top:1.5px;
+  }
+  .tab-btn.active{color:var(--ink);border-bottom-color:var(--copper);font-weight:700;}
+
+  /* ---- Filter bar ---- */
+  .filterbar{display:flex;gap:8px;margin-top:16px;}
+  .filterbar input[type="search"]{
+    flex:1;font-family:var(--font-body);font-size:14px;
+    border:1px solid var(--line);background:#fff;padding:8px 10px;color:var(--ink);
+  }
+  .filterbar select{
+    font-family:var(--font-body);font-size:13px;border:1px solid var(--line);
+    background:#fff;padding:8px 10px;color:var(--ink-soft);
+  }
+  .filterbar input:focus, .filterbar select:focus{border-color:var(--copper);}
+
+  main{padding-top:18px;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadein .25s ease;}
+  @media (prefers-reduced-motion:no-preference){
+    @keyframes fadein{from{opacity:0;}to{opacity:1;}}
+  }
+
+  /* ---- Forms ---- */
+  .add-row{
+    display:flex;flex-wrap:wrap;gap:8px;
+    padding-bottom:16px;margin-bottom:16px;
+    border-bottom:1px dashed var(--line);
+  }
+  .add-row input, .add-row select, .add-row textarea{
+    font-family:var(--font-body);
+    font-size:14px;
+    border:1px solid var(--line);
+    background:#fff;
+    padding:8px 10px;
+    color:var(--ink);
+  }
+  .add-row input:focus, .add-row select:focus, .add-row textarea:focus{border-color:var(--copper);}
+  .add-row input[name="name"], .add-row input[name="title"]{flex:1 1 200px;}
+  .add-row-note{flex-direction:column;align-items:stretch;}
+  .add-row-note textarea{min-height:56px;resize:vertical;font-family:var(--font-body);}
+  .add-row button{
+    background:var(--ink);color:#fff;border:none;
+    font-family:var(--font-display);font-weight:600;font-size:13px;
+    padding:8px 16px;
+  }
+  .add-row button:hover{background:var(--copper);}
+
+  /* ---- Lists ---- */
+  .list{display:flex;flex-direction:column;}
+  .row{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 4px;border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .row:hover{background:rgba(181,101,29,0.04);}
+  .chip{
+    font-family:var(--font-mono);font-size:11.5px;
+    color:var(--ink-soft);background:var(--copper-soft);
+    padding:2px 7px;border:1px solid var(--copper);
+    flex-shrink:0;
+  }
+  .chip.subtle{background:transparent;border-color:var(--line);color:var(--ink-faint);}
+  .row-title{flex:1;font-size:14.5px;min-width:120px;}
+  .row-meta{font-size:12.5px;color:var(--ink-faint);white-space:nowrap;}
+  .icon-btn{
+    background:none;border:none;color:var(--ink-faint);
+    font-size:15px;line-height:1;padding:4px 6px;
+  }
+  .icon-btn:hover{color:var(--red);}
+  .icon-btn.edit-btn:hover{color:var(--copper);}
+  .empty{color:var(--ink-faint);font-size:14px;padding:24px 4px;text-align:center;}
+
+  .grade-select{
+    font-family:var(--font-mono);font-size:12px;
+    border:1px solid var(--line);background:#fff;
+    padding:3px 4px;color:var(--ink-soft);flex-shrink:0;
+  }
+  .grade-select.grade-fail{border-color:var(--red);color:var(--red);}
+  .grade-select.grade-pass{border-color:var(--green);color:var(--green);}
+
+  .row.overdue{border-left:3px solid var(--red);}
+  .row.done{border-left:3px solid var(--green);}
+  .row.upcoming{border-left:3px solid var(--copper);}
+  .row.done .row-title{color:var(--ink-faint);text-decoration:line-through;}
+  .toggle-done{
+    width:18px;height:18px;border:1.5px solid var(--ink-soft);
+    background:#fff;flex-shrink:0;cursor:pointer;
+  }
+  .row.done .toggle-done{background:var(--green);border-color:var(--green);}
+
+  .note-card{
+    border-bottom:1px solid var(--line);
+    padding:14px 4px;
+  }
+  .note-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
+  .note-head-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .note-title{font-family:var(--font-display);font-weight:600;font-size:14.5px;}
+  .note-text{font-size:14.5px;line-height:1.5;white-space:pre-wrap;}
+  .note-card.editing{background:rgba(181,101,29,0.04);}
+  .note-actions{display:flex;gap:8px;margin-top:8px;}
+
+  .hint{margin-top:34px;font-size:12px;color:var(--ink-faint);text-align:center;}
+  .save-flag{position:fixed;bottom:16px;right:16px;font-size:12px;color:var(--ink-faint);font-family:var(--font-mono);opacity:0;transition:opacity .3s;}
+  .save-flag.show{opacity:1;}
+  .loading{padding:60px 0;text-align:center;color:var(--ink-faint);font-family:var(--font-display);}
+</style>
+</head>
+<body>
+
+<div id="authWrap">
+  <div class="auth-box">
+    <h1>Elektrisk Energiteknologi</h1>
+    <p>Sign in to your study dashboard</p>
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" required autocomplete="username">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" required autocomplete="current-password">
+      <button type="submit">Sign in</button>
+      <div class="auth-error" id="authError"></div>
+    </form>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="loading" id="loadingMsg">Loading your dashboard…</div>
+</div>
+<div class="save-flag" id="saveFlag">saved</div>
+
+<script>
+// ====== CONFIG — replace with your own Supabase project values ======
+const SUPABASE_URL = 'https://xhappkwziqznjodnjloo.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhoYXBwa3d6aXF6bmpvZG5qbG9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTkwNTIsImV4cCI6MjEwMzgzNTA1Mn0.u69HXt29sH0_6T-KtvsN2xjM9NUPiA9gltTx1afczP4';
+// ======================================================================
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let currentUser = null;
+
+const GRADE_ORDER = ['-3','00','02','4','7','10','12'];
+
+let state = {
+  courses: [],
+  deadlines: [],
+  notes: [],
+  meta: { targetEcts: 210, semester: 1 }
+};
+
+let activeTab = 'courses';
+let editingNoteId = null;
+const filters = {
+  courses: { search:'', semester:'all' },
+  deadlines: { search:'', status:'all' },
+  notes: { search:'', course:'all' }
+};
+
+const seedState = () => ({
+  courses: [
+    mkCourse('Elektrofysik 1', '62773', 5, 1),
+    mkCourse('Elektrisk Energiteknik', '62762', 5, 1),
+    mkCourse('Måling og styring med mikroprocessorer', '62752', 5, 1),
+    mkCourse('Elektroteknik 1', '62763', 5, 1),
+    mkCourse('Grundlæggende C programmering', '62712', 5, 1),
+    mkCourse('Matematisk Analyse og Modellering', '01911', 5, 1),
+    mkCourse('Elektrofysik 2', '62774', 5, 2),
+    mkCourse('Lineær Algebra og Modellering', '01922', 5, 2),
+    mkCourse('Elektroteknik 2', '62764', 5, 2),
+    mkCourse('Videregående Matematik for Diplom Elektroteknologi', '62735', 5, 2),
+    mkCourse('Modellering og Programmering', '62646', 5, 2),
+    mkCourse('Anvendt Kredsløbsteknik', '62782', 5, 2),
+  ],
+  deadlines: [],
+  notes: [],
+  meta: { targetEcts: 210, semester: 1 }
+});
+
+function mkCourse(name, code, ects, semester){
+  return { id: newId(), name, code, ects, semester, grade: '' };
+}
+function newId(){
+  return 'id_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,7);
+}
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function formatDate(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+function daysUntil(iso){
+  const d = new Date(iso + 'T00:00:00');
+  const t = new Date(todayISO() + 'T00:00:00');
+  return Math.round((d - t) / 86400000);
+}
+function matchesSearch(term, fields){
+  if(!term) return true;
+  const t = term.toLowerCase();
+  return fields.some(f => (f || '').toLowerCase().includes(t));
+}
+function parseGradeValue(g){
+  if(g === '-3') return -3;
+  if(g === '00') return 0;
+  if(['02','4','7','10','12'].includes(g)) return parseInt(g, 10);
+  return null;
+}
+function gradeStatusClass(g){
+  if(!g) return '';
+  if(g === '-3' || g === '00' || g === 'fail') return 'grade-fail';
+  return 'grade-pass';
+}
+function computeGPA(courses){
+  let sumWeighted = 0, sumEcts = 0;
+  courses.forEach(c=>{
+    const v = parseGradeValue(c.grade);
+    if(v !== null){
+      sumWeighted += v * (parseFloat(c.ects) || 0);
+      sumEcts += (parseFloat(c.ects) || 0);
+    }
+  });
+  if(sumEcts === 0) return null;
+  return (sumWeighted / sumEcts);
+}
+function gradeOptionsHtml(selected){
+  const opts = [
+    ['','Not graded'],
+    ['12','12'], ['10','10'], ['7','7'], ['4','4'], ['02','02'], ['00','00'], ['-3','-3'],
+    ['pass','Bestået'], ['fail','Ikke bestået']
+  ];
+  return opts.map(([v,l])=>`<option value="${v}" ${selected===v?'selected':''}>${l}</option>`).join('');
+}
+
+// ---------------- Auth ----------------
+async function initAuth(){
+  const { data:{ session } } = await supabaseClient.auth.getSession();
+  if(session){ currentUser = session.user; showApp(); }
+  else { showAuthScreen(); }
+
+  supabaseClient.auth.onAuthStateChange((event, session)=>{
+    if(session){ currentUser = session.user; showApp(); }
+    else { currentUser = null; showAuthScreen(); }
+  });
+}
+function showAuthScreen(){
+  document.getElementById('authWrap').style.display = '';
+  document.getElementById('app').style.display = 'none';
+}
+function showApp(){
+  document.getElementById('authWrap').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  loadState();
+}
+document.getElementById('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const email = e.target.email.value.trim();
+  const password = e.target.password.value;
+  const errBox = document.getElementById('authError');
+  errBox.textContent = '';
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if(error) errBox.textContent = error.message;
+});
+
+// ---------------- Data load/save (Supabase) ----------------
+async function loadState(){
+  try{
+    const { data, error } = await supabaseClient
+      .from('dashboard_data')
+      .select('data')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if(error) throw error;
+    if(data && data.data && Object.keys(data.data).length){
+      state = data.data;
+      state.courses = state.courses || [];
+      state.deadlines = state.deadlines || [];
+      state.notes = state.notes || [];
+      state.courses.forEach(c=>{ if(c.grade === undefined) c.grade = ''; });
+      state.notes.forEach(n=>{ if(n.title === undefined) n.title = ''; });
+      if(!state.meta) state.meta = { targetEcts:210, semester:1 };
+    } else {
+      state = seedState();
+      await saveState(true);
+    }
+  } catch(e){
+    console.error('Load error', e);
+    state = seedState();
+  }
+  buildApp();
+}
+async function saveState(silent){
+  try{
+    const { error } = await supabaseClient
+      .from('dashboard_data')
+      .upsert({ user_id: currentUser.id, data: state, updated_at: new Date().toISOString() });
+    if(error) throw error;
+    if(!silent) flashSaved();
+  } catch(e){
+    console.error('Save error', e);
+  }
+}
+function flashSaved(){
+  const flag = document.getElementById('saveFlag');
+  flag.classList.add('show');
+  clearTimeout(window.__saveTimer);
+  window.__saveTimer = setTimeout(()=>flag.classList.remove('show'), 900);
+}
+
+// ---------------- App UI (unchanged from the artifact version) ----------------
+function buildApp(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <header class="titleblock">
+      <div class="titleblock-main">
+        <h1>Elektrisk Energiteknologi</h1>
+        <p>DTU Diplomingeniør · Ballerup Campus</p>
+        <button class="signout-btn" id="signOutBtn">Sign out</button>
+      </div>
+      <div class="titleblock-stats">
+        <div class="stat">
+          <span class="stat-label">Semester</span>
+          <select id="semesterSelect"></select>
+        </div>
+        <div class="stat">
+          <span class="stat-label">ECTS</span>
+          <div class="ects-row">
+            <span class="stat-value" id="ectsEarned">0</span>
+            <span class="stat-value">/</span>
+            <input id="ectsTarget" type="number" min="0" step="1">
+          </div>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Avg. grade</span>
+          <span class="stat-value" id="gpaValue">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Next deadline</span>
+          <span class="stat-value" id="nextDeadline" style="font-size:13px;">—</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="courses">Courses</button>
+      <button class="tab-btn" data-tab="deadlines">Deadlines</button>
+      <button class="tab-btn" data-tab="notes">Notes</button>
+    </nav>
+
+    <div class="filterbar">
+      <input type="search" id="searchInput" placeholder="Search…">
+      <select id="contextFilter"></select>
+    </div>
+
+    <main>
+      <section id="panel-courses" class="panel active">
+        <form id="courseForm" class="add-row">
+          <input name="name" placeholder="Course name" required>
+          <input name="code" placeholder="Code" style="width:90px">
+          <input name="ects" type="number" placeholder="ECTS" min="0" step="0.5" style="width:70px" required>
+          <input name="semester" type="number" placeholder="Sem." min="1" max="7" style="width:60px">
+          <button type="submit">Add course</button>
+        </form>
+        <div id="courseList" class="list"></div>
+      </section>
+
+      <section id="panel-deadlines" class="panel">
+        <form id="deadlineForm" class="add-row">
+          <input name="title" placeholder="Deadline title" required>
+          <select name="courseId"></select>
+          <input name="due" type="date" required>
+          <button type="submit">Add deadline</button>
+        </form>
+        <div id="deadlineList" class="list"></div>
+      </section>
+
+      <section id="panel-notes" class="panel">
+        <form id="noteForm" class="add-row add-row-note">
+          <input name="title" placeholder="Title (optional)">
+          <select name="courseId"></select>
+          <textarea name="text" placeholder="Quick note…" required></textarea>
+          <button type="submit">Add note</button>
+        </form>
+        <div id="noteList" class="list"></div>
+      </section>
+    </main>
+
+    <p class="hint">Synced to your Supabase project — accessible from any device you sign in on.</p>
+  `;
+
+  document.getElementById('signOutBtn').addEventListener('click', ()=>supabaseClient.auth.signOut());
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>switchTab(btn.dataset.tab));
+  });
+  document.getElementById('courseForm').addEventListener('submit', onAddCourse);
+  document.getElementById('deadlineForm').addEventListener('submit', onAddDeadline);
+  document.getElementById('noteForm').addEventListener('submit', onAddNote);
+  document.getElementById('courseList').addEventListener('click', onCourseListClick);
+  document.getElementById('courseList').addEventListener('change', onCourseGradeChange);
+  document.getElementById('deadlineList').addEventListener('click', onDeadlineListClick);
+  document.getElementById('noteList').addEventListener('click', onNoteListClick);
+
+  const semSelect = document.getElementById('semesterSelect');
+  semSelect.innerHTML = Array.from({length:7}, (_,i)=>i+1).map(n=>`<option value="${n}">Sem. ${n}</option>`).join('');
+  semSelect.value = state.meta.semester;
+  semSelect.addEventListener('change', e=>{
+    state.meta.semester = parseInt(e.target.value, 10);
+    saveState();
+  });
+
+  const targetInput = document.getElementById('ectsTarget');
+  targetInput.value = state.meta.targetEcts;
+  targetInput.addEventListener('change', e=>{
+    state.meta.targetEcts = parseFloat(e.target.value) || 0;
+    saveState();
+    renderStats();
+  });
+
+  document.getElementById('searchInput').addEventListener('input', e=>{
+    filters[activeTab].search = e.target.value;
+    renderActiveList();
+  });
+  document.getElementById('contextFilter').addEventListener('change', e=>{
+    if(activeTab === 'courses') filters.courses.semester = e.target.value;
+    if(activeTab === 'deadlines') filters.deadlines.status = e.target.value;
+    if(activeTab === 'notes') filters.notes.course = e.target.value;
+    renderActiveList();
+  });
+
+  updateFilterBarForTab(activeTab);
+  renderAll();
+}
+
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active', p.id === 'panel-' + tab));
+  updateFilterBarForTab(tab);
+}
+function updateFilterBarForTab(tab){
+  const search = document.getElementById('searchInput');
+  const ctx = document.getElementById('contextFilter');
+  search.value = filters[tab].search;
+  search.placeholder = tab === 'courses' ? 'Search courses…' : tab === 'deadlines' ? 'Search deadlines…' : 'Search notes…';
+  if(tab === 'courses'){
+    ctx.innerHTML = '<option value="all">All semesters</option>' + Array.from({length:7},(_,i)=>i+1).map(n=>`<option value="${n}">Sem. ${n}</option>`).join('');
+    ctx.value = filters.courses.semester;
+  } else if(tab === 'deadlines'){
+    ctx.innerHTML = `<option value="all">All</option><option value="upcoming">Upcoming</option><option value="overdue">Overdue</option><option value="done">Done</option>`;
+    ctx.value = filters.deadlines.status;
+  } else if(tab === 'notes'){
+    ctx.innerHTML = '<option value="all">All courses</option><option value="general">General</option>' +
+      state.courses.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    ctx.value = filters.notes.course;
+  }
+}
+function renderActiveList(){
+  if(activeTab === 'courses') renderCourses();
+  if(activeTab === 'deadlines') renderDeadlines();
+  if(activeTab === 'notes') renderNotes();
+}
+function renderAll(){
+  renderStats();
+  renderCourseOptions();
+  renderCourses();
+  renderDeadlines();
+  renderNotes();
+}
+function renderStats(){
+  const earned = state.courses.reduce((sum,c)=>sum + (parseFloat(c.ects)||0), 0);
+  document.getElementById('ectsEarned').textContent = earned;
+  const target = document.getElementById('ectsTarget');
+  if(document.activeElement !== target) target.value = state.meta.targetEcts;
+  const gpa = computeGPA(state.courses);
+  document.getElementById('gpaValue').textContent = gpa === null ? '—' : gpa.toFixed(1);
+  const upcoming = state.deadlines.filter(d=>!d.done).sort((a,b)=> a.due.localeCompare(b.due));
+  const next = upcoming[0];
+  document.getElementById('nextDeadline').textContent = next ? `${next.title} · ${formatDate(next.due)}` : '—';
+}
+function renderCourseOptions(){
+  const opts = ['<option value="">General</option>']
+    .concat(state.courses.slice().sort((a,b)=>a.semester-b.semester || a.name.localeCompare(b.name))
+      .map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`));
+  document.querySelectorAll('select[name="courseId"]').forEach(sel=>{
+    const cur = sel.value;
+    sel.innerHTML = opts.join('');
+    if([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+  });
+}
+function renderCourses(){
+  const list = document.getElementById('courseList');
+  if(state.courses.length === 0){
+    list.innerHTML = '<div class="empty">No courses yet — add your first one above.</div>';
+    return;
+  }
+  const f = filters.courses;
+  const filtered = state.courses.filter(c=>
+    (f.semester === 'all' || String(c.semester) === String(f.semester)) &&
+    matchesSearch(f.search, [c.name, c.code])
+  );
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">No courses match your search or filter.</div>';
+    return;
+  }
+  const sorted = filtered.sort((a,b)=> a.semester-b.semester || a.name.localeCompare(b.name));
+  list.innerHTML = sorted.map(c => `
+    <div class="row" data-id="${c.id}">
+      <span class="chip">${escapeHtml(c.code || '—')}</span>
+      <span class="row-title">${escapeHtml(c.name)}</span>
+      <span class="chip subtle">Sem. ${c.semester || '—'}</span>
+      <span class="row-meta">${c.ects} ECTS</span>
+      <select class="grade-select ${gradeStatusClass(c.grade)}" data-id="${c.id}">${gradeOptionsHtml(c.grade || '')}</select>
+      <button class="icon-btn delete-btn" data-id="${c.id}" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+function renderDeadlines(){
+  const list = document.getElementById('deadlineList');
+  if(state.deadlines.length === 0){
+    list.innerHTML = '<div class="empty">No deadlines yet — add one above.</div>';
+    return;
+  }
+  const f = filters.deadlines;
+  const filtered = state.deadlines.filter(d=>{
+    const st = d.done ? 'done' : (daysUntil(d.due) < 0 ? 'overdue' : 'upcoming');
+    const course = state.courses.find(c=>c.id === d.courseId);
+    return (f.status === 'all' || st === f.status) && matchesSearch(f.search, [d.title, course ? course.name : '']);
+  });
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">No deadlines match your search or filter.</div>';
+    return;
+  }
+  const sorted = filtered.sort((a,b)=> a.due.localeCompare(b.due));
+  list.innerHTML = sorted.map(d => {
+    const course = state.courses.find(c=>c.id === d.courseId);
+    const dleft = daysUntil(d.due);
+    let statusClass = 'upcoming';
+    let metaText = dleft === 0 ? 'today' : dleft > 0 ? `in ${dleft}d` : `${-dleft}d overdue`;
+    if(d.done){ statusClass = 'done'; metaText = 'done'; }
+    else if(dleft < 0){ statusClass = 'overdue'; }
+    return `
+      <div class="row ${statusClass}" data-id="${d.id}">
+        <button class="toggle-done" data-id="${d.id}" title="Mark done"></button>
+        <span class="row-title">${escapeHtml(d.title)}</span>
+        ${course ? `<span class="chip subtle">${escapeHtml(course.name)}</span>` : ''}
+        <span class="row-meta">${formatDate(d.due)} · ${metaText}</span>
+        <button class="icon-btn delete-btn" data-id="${d.id}" title="Remove">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+function courseOptionsHtml(selected){
+  const opts = ['<option value="">General</option>']
+    .concat(state.courses.slice().sort((a,b)=>a.semester-b.semester || a.name.localeCompare(b.name))
+      .map(c=>`<option value="${c.id}" ${selected===c.id?'selected':''}>${escapeHtml(c.name)}</option>`));
+  return opts.join('');
+}
+function renderNotes(){
+  const list = document.getElementById('noteList');
+  if(state.notes.length === 0){
+    list.innerHTML = '<div class="empty">No notes yet — jot one down above.</div>';
+    return;
+  }
+  const f = filters.notes;
+  const filtered = state.notes.filter(n=>{
+    const course = state.courses.find(c=>c.id === n.courseId);
+    const courseMatch = f.course === 'all' ? true : f.course === 'general' ? !n.courseId : n.courseId === f.course;
+    return courseMatch && matchesSearch(f.search, [n.title, n.text, course ? course.name : '']);
+  });
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="empty">No notes match your search or filter.</div>';
+    return;
+  }
+  const sorted = filtered.sort((a,b)=> b.created.localeCompare(a.created));
+  list.innerHTML = sorted.map(n => {
+    if(n.id === editingNoteId) return renderNoteEditForm(n);
+    const course = state.courses.find(c=>c.id === n.courseId);
+    return `
+      <div class="note-card" data-id="${n.id}">
+        <div class="note-head">
+          <div class="note-head-left">
+            <span class="chip subtle">${course ? escapeHtml(course.name) : 'General'}</span>
+            <span class="row-meta">${formatDate(n.created.slice(0,10))}${n.updated ? ' · edited' : ''}</span>
+          </div>
+          <div>
+            <button class="icon-btn edit-btn" data-id="${n.id}" title="Edit">✎</button>
+            <button class="icon-btn delete-btn" data-id="${n.id}" title="Remove">✕</button>
+          </div>
+        </div>
+        ${n.title ? `<div class="note-title">${escapeHtml(n.title)}</div>` : ''}
+        <div class="note-text">${escapeHtml(n.text)}</div>
+      </div>
+    `;
+  }).join('');
+}
+function renderNoteEditForm(n){
+  return `
+    <div class="note-card editing" data-id="${n.id}">
+      <input class="edit-title" data-id="${n.id}" value="${escapeAttr(n.title || '')}" placeholder="Title (optional)" style="width:100%;margin-bottom:8px;font-family:var(--font-display);font-weight:600;font-size:14.5px;border:1px solid var(--line);padding:6px 8px;">
+      <select class="edit-course" data-id="${n.id}" style="margin-bottom:8px;border:1px solid var(--line);padding:6px 8px;">${courseOptionsHtml(n.courseId)}</select>
+      <textarea class="edit-text" data-id="${n.id}" style="width:100%;min-height:70px;font-family:var(--font-body);font-size:14.5px;border:1px solid var(--line);padding:6px 8px;">${escapeHtml(n.text)}</textarea>
+      <div class="note-actions">
+        <button type="button" class="save-edit-btn" data-id="${n.id}" style="background:var(--ink);color:#fff;border:none;font-family:var(--font-display);font-weight:600;font-size:13px;padding:6px 14px;">Save</button>
+        <button type="button" class="cancel-edit-btn" data-id="${n.id}" style="background:none;color:var(--ink-soft);border:1px solid var(--line);font-family:var(--font-display);font-size:13px;padding:6px 14px;">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+function onAddCourse(e){
+  e.preventDefault();
+  const f = e.target;
+  const name = f.name.value.trim();
+  if(!name) return;
+  state.courses.push(mkCourse(name, f.code.value.trim(), parseFloat(f.ects.value) || 0, parseInt(f.semester.value, 10) || state.meta.semester));
+  f.reset();
+  saveState();
+  updateFilterBarForTab(activeTab);
+  renderCourses(); renderCourseOptions(); renderStats();
+}
+function onAddDeadline(e){
+  e.preventDefault();
+  const f = e.target;
+  const title = f.title.value.trim();
+  if(!title || !f.due.value) return;
+  state.deadlines.push({ id:newId(), title, courseId:f.courseId.value || null, due:f.due.value, done:false });
+  f.reset();
+  saveState();
+  renderDeadlines(); renderStats();
+}
+function onAddNote(e){
+  e.preventDefault();
+  const f = e.target;
+  const text = f.text.value.trim();
+  if(!text) return;
+  state.notes.push({ id:newId(), courseId:f.courseId.value || null, title:f.title.value.trim(), text, created:new Date().toISOString(), updated:null });
+  f.reset();
+  saveState();
+  renderNotes();
+}
+function onCourseListClick(e){
+  const btn = e.target.closest('.delete-btn');
+  if(!btn) return;
+  state.courses = state.courses.filter(c=>c.id !== btn.dataset.id);
+  saveState();
+  updateFilterBarForTab(activeTab);
+  renderCourses(); renderCourseOptions(); renderStats(); renderDeadlines(); renderNotes();
+}
+function onCourseGradeChange(e){
+  const sel = e.target.closest('.grade-select');
+  if(!sel) return;
+  const c = state.courses.find(c=>c.id === sel.dataset.id);
+  if(!c) return;
+  c.grade = sel.value;
+  saveState();
+  renderCourses();
+  renderStats();
+}
+function onDeadlineListClick(e){
+  const del = e.target.closest('.delete-btn');
+  const toggle = e.target.closest('.toggle-done');
+  if(del){
+    state.deadlines = state.deadlines.filter(d=>d.id !== del.dataset.id);
+    saveState(); renderDeadlines(); renderStats();
+    return;
+  }
+  if(toggle){
+    const d = state.deadlines.find(d=>d.id === toggle.dataset.id);
+    if(d){ d.done = !d.done; saveState(); renderDeadlines(); renderStats(); }
+  }
+}
+function onNoteListClick(e){
+  const del = e.target.closest('.delete-btn');
+  const edit = e.target.closest('.edit-btn');
+  const save = e.target.closest('.save-edit-btn');
+  const cancel = e.target.closest('.cancel-edit-btn');
+  if(del){
+    state.notes = state.notes.filter(n=>n.id !== del.dataset.id);
+    if(editingNoteId === del.dataset.id) editingNoteId = null;
+    saveState();
+    renderNotes();
+    return;
+  }
+  if(edit){ editingNoteId = edit.dataset.id; renderNotes(); return; }
+  if(cancel){ editingNoteId = null; renderNotes(); return; }
+  if(save){
+    const id = save.dataset.id;
+    const n = state.notes.find(n=>n.id === id);
+    if(n){
+      const card = save.closest('.note-card');
+      const title = card.querySelector('.edit-title').value.trim();
+      const courseId = card.querySelector('.edit-course').value || null;
+      const text = card.querySelector('.edit-text').value.trim();
+      if(text){
+        n.title = title; n.courseId = courseId; n.text = text;
+        n.updated = new Date().toISOString();
+      }
+    }
+    editingNoteId = null;
+    saveState();
+    renderNotes();
+  }
+}
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+function escapeAttr(str){
+  return String(str ?? '')
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+initAuth();
+</script>
+</body>
+</html>
